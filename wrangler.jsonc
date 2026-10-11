@@ -1,6 +1,6 @@
 {
 	"$schema": "https://raw.githubusercontent.com/cloudflare/wrangler/main/config-schema.json",
-	"name": "nekro-edge-template",
+	"name": "rikkablog",
 	"main": "src/index.ts",
 	"compatibility_date": "2024-07-29",
 	"compatibility_flags": [
@@ -31,7 +31,7 @@
 	},
 	"env": {
 		"production": {
-			"name": "luy-blog",
+			"name": "rikkablog",
 			"assets": {
 				"binding": "ASSETS",
 				"directory": "./dist/client"
@@ -63,12 +63,10 @@
     "logs": {
       "enabled": true,
       "head_sampling_rate": 1,
-      "persist": true,
       "invocation_logs": true
     },
     "traces": {
       "enabled": false,
-      "persist": true,
       "head_sampling_rate": 1
     }
   }
