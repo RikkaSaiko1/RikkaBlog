@@ -1,0 +1,2 @@
+-- Seed data for blog base tables (currently no bootstrap rows required)
+-- Keep this file for future seed entries.

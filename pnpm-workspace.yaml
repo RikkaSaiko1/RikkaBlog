@@ -1,0 +1,8 @@
+packages:
+  - "."
+
+allowBuilds:
+  '@swc/core': true
+  esbuild: false
+  sharp: false
+  workerd: false
