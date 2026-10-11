@@ -100,15 +100,16 @@ export default function HomePage() {
                 </div>
               </RouterLink>
             ) : (
-              <div
+              <RouterLink
                 className="feature-card large ink has-image"
+                to="/blog"
                 data-number="FEATURE / 01"
                 style={featureImageStyle(fallbackCover)}
               >
                 <span className="eyebrow">工程札记</span>
                 <h3>新的文章正在路上</h3>
                 <p>从真实问题出发，记录完整的思考与实现过程。</p>
-              </div>
+              </RouterLink>
             )}
 
             {secondaryPost ? (
