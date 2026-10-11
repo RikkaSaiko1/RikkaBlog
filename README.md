@@ -182,6 +182,11 @@ src/services        # 服务逻辑
 - [部署指南](./docs/DEPLOYMENT.md)
 - [SEO 配置指南](./docs/SEO_GUIDE.md)
 
+## 鸣谢
+本项目由修改自原项目
+[LuyBlog](https://github.com/yang208115/LuyBlog) 
+
+
 ## License
 
 本项目采用 [MIT](./LICENSE) 协议进行许可。
