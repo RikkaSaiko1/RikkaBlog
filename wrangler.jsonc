@@ -54,7 +54,9 @@
 				"NODE_ENV": "production",
 				"VITE_PORT": "5173"
 				// APP_BASE_URL 请在线上 Worker 的 Settings → Variables and Secrets 中配置（建议设为 Secret，deploy 不会被覆盖）
-			}
+			},
+			// 每次 CI 部署自动关闭 *.workers.dev 预览地址，仅保留自定义域名访问
+			"workers_dev": false
 		}
 	},
 	"observability": {
