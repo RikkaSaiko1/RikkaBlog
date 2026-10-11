@@ -60,7 +60,7 @@ export function PageManager() {
             >
               AI 优化正文
             </Button>
-            <Typography variant="caption" color="text.secondary">标题 → 生成 slug 与正文；正文 → AI 扩写内容并优化 Markdown 格式</Typography>
+            <Typography variant="caption" color="text.secondary">标题 → 生成 slug 与正文；正文 → AI 润色表达并优化 Markdown 格式，不扩写不杜撰</Typography>
           </Stack>
           {aiContentMutation.isError && <Alert severity="error" onClose={() => aiContentMutation.reset()}>{aiContentMutation.error.message}</Alert>}
           {aiPolishMutation.isError && <Alert severity="error" onClose={() => aiPolishMutation.reset()}>{aiPolishMutation.error.message}</Alert>}

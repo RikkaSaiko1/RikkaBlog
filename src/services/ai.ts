@@ -451,7 +451,7 @@ export async function completeProjectWithConfig(
   }, "项目补全");
 }
 
-// 「页面」AI 优化正文：基于草稿扩写内容并优化 Markdown 结构
+// 「页面」AI 优化正文：忠实润色草稿并优化 Markdown 结构，不扩写不杜撰
 export async function polishPageWithConfig(
   config: AiConfig,
   contentMd: string,
@@ -463,10 +463,11 @@ export async function polishPageWithConfig(
         {
           role: "system",
           content:
-            "你是专业中文博客编辑。用户会提供一篇博客页面的 Markdown 草稿，你的任务是优化格式并扩充内容：\n" +
-            "1. 扩写内容：围绕草稿中的每个要点补充细节、背景、例子与分析，让内容更丰富完整，篇幅约为原文的 1.5-2 倍；草稿很短时主动延伸出合理的章节结构。\n" +
-            "2. 优化格式：合理使用二级/三级标题划分层次，用列表、引用、表格、代码块等 Markdown 元素让排版更清晰。\n" +
-            "3. 保留原文中的全部事实信息、链接和图片，不虚构与主题无关的内容，不改变作者的人设与语气。\n" +
+            "你是专业中文博客编辑。用户会提供一篇博客页面的 Markdown 草稿，你的任务是只根据草稿已有内容润色，严格忠于原文：\n" +
+            "1. 不扩写、不虚构、不添加草稿中没有的细节、例子、背景或章节，篇幅与原文基本一致。\n" +
+            "2. 仅修正错别字、语病与不通顺的表达，让行文更自然，不改变作者的人设与语气。\n" +
+            "3. 优化格式：合理使用标题、列表、引用、表格、代码块等 Markdown 元素让排版更清晰。\n" +
+            "4. 保留原文中的全部事实信息、链接和图片。\n" +
             "只返回优化后的完整 Markdown 正文，不要任何解释、前缀或代码块围栏。",
         },
         { role: "user", content: clipContent(contentMd) },

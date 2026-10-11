@@ -330,7 +330,7 @@ export function SiteConfigManager() {
           <Field label="眉题（eyebrow）"><input value={form.heroEyebrow} onChange={(e) => update("heroEyebrow", e.target.value)} /></Field>
           <Field label="角色说明"><input value={form.heroRole} onChange={(e) => update("heroRole", e.target.value)} /></Field>
           <Field label="大标题" full help="用 *内容* 表示高亮（斜体），用换行表示换行，例如：人生苦短，↵我用 *Python*。"><textarea rows={2} value={form.heroTitle} onChange={(e) => update("heroTitle", e.target.value)} /></Field>
-          <Field label="引导语" full help="显示在「嗨，我是〔名字〕。」之后。"><textarea rows={2} value={form.heroLead} onChange={(e) => update("heroLead", e.target.value)} /></Field>
+          <Field label="引导语" full help="显示在大标题下方的一句话介绍。"><textarea rows={2} value={form.heroLead} onChange={(e) => update("heroLead", e.target.value)} /></Field>
         </Section>
       </form>
     </>

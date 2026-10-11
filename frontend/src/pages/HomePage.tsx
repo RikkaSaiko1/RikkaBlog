@@ -58,9 +58,7 @@ export default function HomePage() {
             </span>
           </div>
           <h1 className="display-title">{renderHeroTitle(siteConfig.heroTitle)}</h1>
-          <p className="lead">
-            嗨，我是{siteConfig.authorName}。{siteConfig.heroLead}
-          </p>
+          {siteConfig.heroLead && <p className="lead">{siteConfig.heroLead}</p>}
         </section>
 
         <section className="section">
