@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => {
   return {
     root: "frontend",
     plugins: [react(), unocss()],
+    // 构建时刻（CF 部署即重新构建），用于运行时长兜底起点
+    define: {
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    },
     build: {
       outDir: "../dist/client",
       manifest: true,

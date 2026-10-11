@@ -1,7 +1,7 @@
 import type {
   AiChatMessage,
-  AiCompletePageResponse,
   AiCompletePostResponse,
+  AiPolishPageResponse,
   AiCompletionField,
   AiCompleteProjectResponse,
   AiFillFriendLinkResponse,
@@ -103,7 +103,7 @@ async function runChatWithConfig(
   config: AiConfig,
   messages: ChatMessage[],
   temperature?: number,
-  options?: { jsonMode?: boolean },
+  options?: { jsonMode?: boolean; minTokens?: number },
 ): Promise<ChatResult> {
   const apiKey = config.apiKey?.trim();
   if (!apiKey) {
@@ -112,56 +112,75 @@ async function runChatWithConfig(
 
   const baseUrl = config.baseUrl?.trim() || defaultBaseUrl;
   const model = config.model?.trim() || defaultModel;
+  // 长输出任务（写正文/多字段 JSON）需要足够的 token 预算；思考型模型的推理也计入 max_tokens，
+  // 因此对配置值取下限，避免站点配置里的默认小值把输出截断成残片
+  const maxTokens =
+    config.maxTokens != null && options?.minTokens != null
+      ? Math.max(config.maxTokens, options.minTokens)
+      : config.maxTokens ?? undefined;
 
-  // 上游偶发挂起会拖死 Worker 请求，统一加 60s 超时
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
-  let response: Response;
-  try {
-    response = await fetch(chatCompletionsUrl(baseUrl), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: config.maxTokens ?? undefined,
-        temperature: temperature ?? config.temperature ?? 0.3,
-        messages,
-        ...(options?.jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("AI 服务请求超时，请稍后重试");
+  // 部分上游/网关不支持 response_format 参数会直接返回 4xx/5xx，遇到这种情况去掉该参数重试一次
+  const jsonModeAttempts = options?.jsonMode ? [true, false] : [false];
+  let lastError: Error | undefined;
+  for (const useJsonMode of jsonModeAttempts) {
+    // 上游偶发挂起会拖死 Worker 请求，统一加 60s 超时
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    let response: Response;
+    try {
+      response = await fetch(chatCompletionsUrl(baseUrl), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          temperature: temperature ?? config.temperature ?? 0.3,
+          messages,
+          ...(useJsonMode ? { response_format: { type: "json_object" } } : {}),
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("AI 服务请求超时，请稍后重试");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`AI 服务调用失败: ${response.status} ${errorText.slice(0, 500)}`);
-  }
-  if (!contentType.includes("application/json")) {
-    const bodyText = await response.text();
-    throw new Error(`AI 服务返回非 JSON 响应: ${contentType || "unknown"} ${bodyText.slice(0, 200)}`);
-  }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok) {
+      const errorText = await response.text();
+      lastError = new Error(`AI 服务调用失败: ${response.status} ${errorText.slice(0, 500)}`);
+      // 401/403/429 与参数无关，重试无意义
+      const paramRejected = response.status === 400 || response.status === 404 || response.status === 422 || response.status >= 500;
+      if (useJsonMode && paramRejected) {
+        console.warn(`AI 上游拒绝 JSON 模式请求（${response.status}），去掉 response_format 重试`);
+        continue;
+      }
+      throw lastError;
+    }
+    if (!contentType.includes("application/json")) {
+      const bodyText = await response.text();
+      throw new Error(`AI 服务返回非 JSON 响应: ${contentType || "unknown"} ${bodyText.slice(0, 200)}`);
+    }
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
 
-  const text = data.choices?.[0]?.message?.content?.trim();
-  if (!text) {
-    throw new Error("AI 返回为空");
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text) {
+      throw new Error("AI 返回为空");
+    }
+
+    return { text };
   }
-
-  return { text };
+  throw lastError ?? new Error("AI 调用失败");
 }
 
 // 通用重试：轻量模型输出不稳定，失败时自动重试，最多 3 次；"未配置 API Key" 属确定性错误，不重试
@@ -198,7 +217,7 @@ export async function chatWithConfig(
   const result = await runChatWithConfig(config, [
     { role: "system", content: `${systemPrompt}${articleContext}` },
     ...messages,
-  ]);
+  ], undefined, { minTokens: 2048 });
   return result.text;
 }
 
@@ -277,7 +296,7 @@ export async function completePostWithConfig(
 
   // 轻量模型输出不稳定（偶发丢字段/包裹多余文本），失败时自动重试，最多 3 次
   return withRetry(async (attempt) => {
-    const result = await runChatWithConfig(config, messages, 0.4, { jsonMode: true });
+    const result = await runChatWithConfig(config, messages, 0.4, { jsonMode: true, minTokens: 2048 });
     const parsed = extractJsonObject(result.text, attempt, "AI 补全");
 
     const output: AiCompletePostResponse = {};
@@ -358,6 +377,7 @@ export async function polishMomentWithConfig(
         { role: "user", content: clipContent(contentMd) },
       ],
       0.6,
+      { minTokens: 2048 },
     );
 
     // 兜底剥离模型偶发包裹的代码围栏
@@ -395,7 +415,7 @@ export async function completeProjectWithConfig(
         { role: "user", content: `【项目资料开始】\n${clipContent(enriched, 6000)}\n【项目资料结束】\n请把以上资料提取为 JSON。` },
       ],
       0.3,
-      { jsonMode: true },
+      { jsonMode: true, minTokens: 2048 },
     );
 
     const parsedRaw = extractJsonObject(result.text, attempt, "项目 AI 补全");
@@ -431,11 +451,11 @@ export async function completeProjectWithConfig(
   }, "项目补全");
 }
 
-// 「页面」AI 补全：生成页面标题 + 英文 slug（slug 查重由路由层 makeUniqueSlug 处理）
-export async function completePageWithConfig(
+// 「页面」AI 优化正文：基于草稿扩写内容并优化 Markdown 结构
+export async function polishPageWithConfig(
   config: AiConfig,
   contentMd: string,
-): Promise<AiCompletePageResponse> {
+): Promise<AiPolishPageResponse> {
   return withRetry(async (attempt) => {
     const result = await runChatWithConfig(
       config,
@@ -443,23 +463,25 @@ export async function completePageWithConfig(
         {
           role: "system",
           content:
-            '你是专业中文博客编辑。为独立页面（如「关于」「友链」等）根据正文生成标题与英文 slug。只返回一个合法 JSON 对象：{"title":"简洁贴切的页面标题","slug":"一个简洁的小写英文单词（优先单个单词，如 communication），仅在语义确实需要时才用连字符，禁止使用日期或数字"}。不要使用 Markdown 包裹。',
+            "你是专业中文博客编辑。用户会提供一篇博客页面的 Markdown 草稿，你的任务是优化格式并扩充内容：\n" +
+            "1. 扩写内容：围绕草稿中的每个要点补充细节、背景、例子与分析，让内容更丰富完整，篇幅约为原文的 1.5-2 倍；草稿很短时主动延伸出合理的章节结构。\n" +
+            "2. 优化格式：合理使用二级/三级标题划分层次，用列表、引用、表格、代码块等 Markdown 元素让排版更清晰。\n" +
+            "3. 保留原文中的全部事实信息、链接和图片，不虚构与主题无关的内容，不改变作者的人设与语气。\n" +
+            "只返回优化后的完整 Markdown 正文，不要任何解释、前缀或代码块围栏。",
         },
-        { role: "user", content: `页面正文：\n${clipContent(contentMd)}` },
+        { role: "user", content: clipContent(contentMd) },
       ],
-      0.4,
-      { jsonMode: true },
+      0.7,
+      { minTokens: 8192 },
     );
 
-    const parsed = extractJsonObject(result.text, attempt, "页面 AI 补全");
-    const title = String(parsed.title ?? "").trim().slice(0, 100);
-    const slug = normalizeSlug(String(parsed.slug ?? "")) || slugifyTitle(title);
-    if (!title || !slug) {
-      console.warn(`页面 AI 补全第 ${attempt} 次：标题或 slug 无效`, JSON.stringify(parsed));
-      throw new Error("AI 未生成有效的页面标题或 slug，请重试");
+    const optimized = stripCodeFence(result.text);
+    if (optimized.length < 10) {
+      console.warn(`页面 AI 优化第 ${attempt} 次：模型返回无效内容`, result.text.slice(0, 300));
+      throw new Error("AI 未返回有效的优化内容，请重试");
     }
-    return { title, slug };
-  }, "页面补全");
+    return { contentMd: optimized };
+  }, "页面优化");
 }
 
 // 剥离模型偶发包裹的 Markdown 代码围栏
@@ -494,7 +516,7 @@ export async function generatePageWithConfig(config: AiConfig, title: string): P
           { role: "user", content: `页面标题：${title}\n请仅输出 JSON，contentMd 中必须包含完整正文。` },
         ],
         0.6,
-        { jsonMode: true },
+        { jsonMode: true, minTokens: 4096 },
       );
 
       const parsed = extractJsonObject(result.text, attempt, "页面 AI 生成");
@@ -526,6 +548,7 @@ export async function generatePageWithConfig(config: AiConfig, title: string): P
           { role: "user", content: `页面标题：${title}\n请直接输出完整正文（第 ${attempt} 次请求）。` },
         ],
         0.6,
+        { minTokens: 4096 },
       );
       const contentMd = stripCodeFence(writing.text);
       if (contentMd.length < 50) {
@@ -535,8 +558,7 @@ export async function generatePageWithConfig(config: AiConfig, title: string): P
       return contentMd;
     };
     const contentMd = await withRetry(writeOnce, "页面降级写作");
-    const slugResult = await completePageWithConfig(config, contentMd).catch(() => undefined);
-    const slug = slugResult?.slug || slugifyTitle(title) || `page-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    const slug = slugifyTitle(title) || `page-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
     return { slug, contentMd };
   }
 }

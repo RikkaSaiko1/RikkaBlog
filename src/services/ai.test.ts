@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiChatSchema, AiCompletePostSchema } from "../../common/validators/ai.schema";
 import {
-  completePageWithConfig,
   completePostWithConfig,
   completeProjectWithConfig,
   generatePageWithConfig,
@@ -11,6 +10,7 @@ import {
   normalizeSlug,
   polishFriendLinkWithConfig,
   polishMomentWithConfig,
+  polishPageWithConfig,
   slugifyTitle,
 } from "./ai";
 
@@ -205,19 +205,18 @@ describe("AI project completion", () => {
   });
 });
 
-describe("AI page completion", () => {
-  it("generates a title and normalized slug", async () => {
+describe("AI page polishing", () => {
+  it("returns the optimized markdown and strips code fences", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        new Response(JSON.stringify({ choices: [{ message: { content: '{"title":"友链登记说明","slug":"Friends Page"}' } }] }), {
+        new Response(JSON.stringify({ choices: [{ message: { content: "```markdown\n## 友链登记说明\n\n请按要求填写。\n```" } }] }), {
           headers: { "Content-Type": "application/json" },
         }),
       ),
     );
-    await expect(completePageWithConfig({ apiKey: "key" }, "页面正文内容")).resolves.toEqual({
-      title: "友链登记说明",
-      slug: "friends-page",
+    await expect(polishPageWithConfig({ apiKey: "key" }, "原始正文")).resolves.toEqual({
+      contentMd: "## 友链登记说明\n\n请按要求填写。",
     });
   });
 });

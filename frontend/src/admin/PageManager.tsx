@@ -16,9 +16,9 @@ export function PageManager() {
   const [editing, setEditing] = useState<AdminPageItem | null>(null);
   const [form, setForm] = useState<PageForm>(emptyForm);
   const query = useQuery({ queryKey: ["admin", "pages"], queryFn: adminApi.pages });
-  const aiTitleMutation = useMutation({
-    mutationFn: () => adminApi.aiCompletePage(form.contentMd, editing?.id),
-    onSuccess: ({ title, slug }) => setForm((prev) => ({ ...prev, title, slug })),
+  const aiPolishMutation = useMutation({
+    mutationFn: () => adminApi.aiPolishPage(form.contentMd),
+    onSuccess: ({ contentMd }) => setForm((prev) => ({ ...prev, contentMd })),
   });
   const aiContentMutation = useMutation({
     mutationFn: () => adminApi.aiGeneratePage(form.title),
@@ -54,16 +54,16 @@ export function PageManager() {
             </Button>
             <Button
               size="small"
-              startIcon={aiTitleMutation.isPending ? <CircularProgress size={15} /> : <AutoAwesomeRounded />}
-              disabled={!form.contentMd.trim() || aiTitleMutation.isPending}
-              onClick={() => aiTitleMutation.mutate()}
+              startIcon={aiPolishMutation.isPending ? <CircularProgress size={15} /> : <AutoAwesomeRounded />}
+              disabled={!form.contentMd.trim() || aiPolishMutation.isPending}
+              onClick={() => aiPolishMutation.mutate()}
             >
-              AI 生成标题
+              AI 优化正文
             </Button>
-            <Typography variant="caption" color="text.secondary">标题 → 生成 slug 与正文；正文 → 生成标题与 slug</Typography>
+            <Typography variant="caption" color="text.secondary">标题 → 生成 slug 与正文；正文 → AI 扩写内容并优化 Markdown 格式</Typography>
           </Stack>
           {aiContentMutation.isError && <Alert severity="error" onClose={() => aiContentMutation.reset()}>{aiContentMutation.error.message}</Alert>}
-          {aiTitleMutation.isError && <Alert severity="error" onClose={() => aiTitleMutation.reset()}>{aiTitleMutation.error.message}</Alert>}
+          {aiPolishMutation.isError && <Alert severity="error" onClose={() => aiPolishMutation.reset()}>{aiPolishMutation.error.message}</Alert>}
           <MarkdownEditor label="Markdown 正文" value={form.contentMd} onChange={(value) => setForm({ ...form, contentMd: value })} />
         </Stack>
       </EntityDialog>

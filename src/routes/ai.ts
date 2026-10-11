@@ -2,18 +2,17 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { and, eq, ne } from "drizzle-orm";
 import {
   AiChatSchema,
-  AiCompletePageSchema,
   AiCompletePostSchema,
   AiCompleteProjectSchema,
   AiFillFriendLinkSchema,
   AiGeneratePageSchema,
   AiPolishMomentSchema,
+  AiPolishPageSchema,
 } from "../../common/validators/ai.schema";
 import { authMiddleware } from "../middleware/auth";
 import { adminMiddleware } from "../middleware/admin";
 import {
   chatWithConfig,
-  completePageWithConfig,
   completePostWithConfig,
   completeProjectWithConfig,
   generatePageWithConfig,
@@ -21,6 +20,7 @@ import {
   makeUniqueSlug,
   polishFriendLinkWithConfig,
   polishMomentWithConfig,
+  polishPageWithConfig,
 } from "../services/ai";
 import { fetchLinkMetadata, normalizeUrl } from "../services/linkMeta";
 import { getSiteConfig } from "./siteConfig";
@@ -152,21 +152,13 @@ app.post("/complete-project", async (c) => {
   }
 });
 
-app.post("/complete-page", async (c) => {
-  const parsed = AiCompletePageSchema.safeParse(await c.req.json().catch(() => null));
+app.post("/polish-page", async (c) => {
+  const parsed = AiPolishPageSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ code: 400, message: "参数不合法" }, 400);
 
   try {
-    const db = c.get("db");
-    const config = await getSiteConfig(db);
-    const result = await completePageWithConfig(config.aiConfig, parsed.data.contentMd);
-
-    result.slug = await makeUniqueSlug(result.slug, async (slug) => {
-      const condition = parsed.data.pageId
-        ? and(eq(pages.slug, slug), ne(pages.id, parsed.data.pageId))
-        : eq(pages.slug, slug);
-      return Boolean(await db.select({ id: pages.id }).from(pages).where(condition).get());
-    });
+    const config = await getSiteConfig(c.get("db"));
+    const result = await polishPageWithConfig(config.aiConfig, parsed.data.contentMd);
     return c.json(result);
   } catch (error) {
     const { message, status } = aiError(error);

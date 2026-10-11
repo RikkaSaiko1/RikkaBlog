@@ -94,9 +94,8 @@ export type AiCompleteProjectResponse = {
   githubUrl?: string;
 };
 
-export type AiCompletePageResponse = {
-  title: string;
-  slug: string;
+export type AiPolishPageResponse = {
+  contentMd: string;
 };
 
 export type AiFillFriendLinkResponse = {
@@ -217,8 +216,8 @@ export const adminApi = {
     request<{ contentMd: string }>("/api/ai/polish-moment", json("POST", { contentMd, mode })),
   aiCompleteProject: (text: string) =>
     request<AiCompleteProjectResponse>("/api/ai/complete-project", json("POST", { text })),
-  aiCompletePage: (contentMd: string, pageId?: string) =>
-    request<AiCompletePageResponse>("/api/ai/complete-page", json("POST", { contentMd, pageId })),
+  aiPolishPage: (contentMd: string) =>
+    request<AiPolishPageResponse>("/api/ai/polish-page", json("POST", { contentMd })),
   aiGeneratePage: (title: string) =>
     request<{ slug: string; contentMd: string }>("/api/ai/generate-page", json("POST", { title })),
   aiFillFriendLink: (url: string) =>

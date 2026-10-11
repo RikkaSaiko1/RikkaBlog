@@ -80,6 +80,22 @@ export function MarkdownView({ content }: { content: string }) {
         rehypePlugins={[rehypeRaw]}
         urlTransform={urlTransform}
         components={{
+          // 图片语法指向视频文件时渲染为播放器，其余保持 <img>
+          img({ src, alt, ...props }) {
+            if (src && /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(src)) {
+              return (
+                <Box
+                  component="video"
+                  src={src}
+                  controls
+                  sx={{ display: "block", maxWidth: "100%", height: "auto", borderRadius: 2, my: 2 }}
+                />
+              );
+            }
+            return (
+              <img src={src} alt={alt} {...props} />
+            );
+          },
           // 命中 YouTube / Bilibili 分享链接时直接渲染为播放器，其余链接保持原样
           a({ href, children, ...props }) {
             const embed = href ? videoUrlToEmbed(href) : null;

@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultSiteConfig } from "../../frontend/src/config/siteConfig";
-import { posts, pages, siteSettings } from "../db/schema";
+import { posts, siteSettings } from "../db/schema";
 import ai from "./ai";
 
 const context = { title: "测试文章", slug: "", summary: "", category: "", tags: [], contentMd: "正文" };
@@ -152,44 +152,32 @@ describe("AI routes", () => {
     });
   });
 
-  it("uniquifies generated page slugs against existing pages", async () => {
+  it("polishes page markdown and returns the optimized content", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        new Response(JSON.stringify({ choices: [{ message: { content: '{"title":"关于本站","slug":"About Site"}' } }] }), {
-          headers: { "Content-Type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({ choices: [{ message: { content: "## 关于本站\n\n这是优化后的页面正文。" } }] }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
       ),
     );
 
-    let pageSlugCalls = 0;
-    const db = {
-      ...createDb(),
-      select: vi.fn((fields?: Record<string, unknown>) => ({
-        from: (table: unknown) => {
-          if (table === siteSettings) {
-            return {
-              where: () => ({
-                get: async () => ({
-                  value: JSON.stringify({
-                    ...defaultSiteConfig,
-                    aiConfig: { ...defaultSiteConfig.aiConfig, apiKey: "test-key" },
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === pages) {
-            return { where: () => ({ get: async () => (pageSlugCalls++ === 0 ? { id: "existing" } : undefined) }) };
-          }
-          if (table === posts && fields && "category" in fields) return Promise.resolve([]);
-          return { where: () => ({ get: async () => undefined }) };
-        },
-      })),
-    };
-
-    const response = await createApp(db).request("/complete-page", request({ contentMd: "页面正文内容" }), {});
+    const response = await createApp(createDb()).request(
+      "/polish-page",
+      request({ contentMd: "原始页面正文内容" }),
+      {},
+    );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ title: "关于本站", slug: "about-site-2" });
+    expect(await response.json()).toEqual({ contentMd: "## 关于本站\n\n这是优化后的页面正文。" });
+  });
+
+  it("returns 503 for page polishing when the AI key is missing", async () => {
+    const response = await createApp(createDb("admin", false)).request(
+      "/polish-page",
+      request({ contentMd: "要优化的页面正文" }),
+      {},
+    );
+    expect(response.status).toBe(503);
   });
 });

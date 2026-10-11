@@ -29,6 +29,16 @@ function fromForm(form: FormState): SiteConfig {
   return normalizeSiteConfig({ ...form, bgImages: splitLines(form.bgImagesText), footerBadges });
 }
 
+// 把存储的日期值转为 datetime-local 控件可显示的格式；无法解析时返回空串（控件显示未选择）
+function toDateTimeLocal(value: string): string {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return "";
+  const parsed = new Date(trimmed.includes("T") && trimmed.length <= 16 ? trimmed : trimmed.replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+}
+
 function Section({
   index,
   title,
@@ -259,7 +269,7 @@ export function SiteConfigManager() {
         </Section>
 
         <Section index="04" title="功能配置" description="建站时间、页脚徽章与页脚固定文案。">
-          <Field label="建站时间" help="留空则从当前时间起算；填写日期（如 2026-01-01T00:00:00）则从该日期累计运行时长。"><input value={form.buildDate} onChange={(e) => update("buildDate", e.target.value)} /></Field>
+          <Field label="建站时间" help="留空则从本次部署（构建）时刻起算；选择日期后从该时刻累计运行时长。"><input type="datetime-local" value={toDateTimeLocal(form.buildDate)} onChange={(e) => update("buildDate", e.target.value)} /></Field>
           <Field label="运行时长文案（前缀）" help="只填固定文案，运行时长会自动拼接在后面。"><input value={form.uptimeLabel} onChange={(e) => update("uptimeLabel", e.target.value)} /></Field>
           <Field label="版权后缀（Built with …）"><input value={form.footerBuiltWith} onChange={(e) => update("footerBuiltWith", e.target.value)} /></Field>
           <Field label="页脚徽章 JSON" full help={footerBadgesError || "请输入合法 JSON 数组，保存前会进行格式检查。"}>

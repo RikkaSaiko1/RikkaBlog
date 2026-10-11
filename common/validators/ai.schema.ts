@@ -48,9 +48,8 @@ export const AiCompleteProjectSchema = z.object({
   text: z.string().trim().min(1).max(8000),
 });
 
-export const AiCompletePageSchema = z.object({
+export const AiPolishPageSchema = z.object({
   contentMd: z.string().trim().min(1).max(60000),
-  pageId: z.string().min(1).optional(),
 });
 
 export const AiGeneratePageSchema = z.object({
@@ -69,9 +68,8 @@ export const AiCompleteProjectResponseSchema = z.object({
   githubUrl: z.string().optional(),
 });
 
-export const AiCompletePageResponseSchema = z.object({
-  title: z.string(),
-  slug: z.string(),
+export const AiPolishPageResponseSchema = z.object({
+  contentMd: z.string(),
 });
 
 export const AiGeneratePageResponseSchema = z.object({
@@ -91,6 +89,6 @@ export type AiCompletionField = z.infer<typeof AiCompletionFieldSchema>;
 export type AiCompletePostResponse = z.infer<typeof AiCompletePostResponseSchema>;
 export type AiPolishMomentMode = z.infer<typeof AiPolishMomentSchema>["mode"];
 export type AiCompleteProjectResponse = z.infer<typeof AiCompleteProjectResponseSchema>;
-export type AiCompletePageResponse = z.infer<typeof AiCompletePageResponseSchema>;
+export type AiPolishPageResponse = z.infer<typeof AiPolishPageResponseSchema>;
 export type AiGeneratePageResponse = z.infer<typeof AiGeneratePageResponseSchema>;
 export type AiFillFriendLinkResponse = z.infer<typeof AiFillFriendLinkResponseSchema>;

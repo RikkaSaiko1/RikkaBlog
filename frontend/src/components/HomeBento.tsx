@@ -6,6 +6,7 @@ import { glassPanelSx } from "./Glass";
 import type { PostItem } from "../services/content";
 import { useAppTheme } from "../context/ThemeContextProvider";
 import { useSiteConfig } from "../context/SiteConfigProvider";
+import { useUptime } from "../hooks/useUptime";
 
 function formatDate(value?: string | null) {
   if (!value) return "";
@@ -156,23 +157,17 @@ export function ThemeBento({ minHeight = 180 }: { minHeight?: number } = {}) {
 export function SiteDashboardBento() {
   const siteConfig = useSiteConfig();
   const [time, setTime] = useState("00:00:00");
-  const [uptime, setUptime] = useState("");
+  const uptime = useUptime(siteConfig.buildDate);
 
   useEffect(() => {
-    const trimmed = (siteConfig.buildDate || "").trim();
-    const start = trimmed && !Number.isNaN(new Date(trimmed).getTime()) ? new Date(trimmed).getTime() : Date.now();
     const update = () => {
       const now = new Date();
       setTime(now.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-      const elapsed = Math.max(0, now.getTime() - start);
-      const hours = 60 * 60 * 1000;
-      const days = 24 * hours;
-      setUptime(`${Math.floor(elapsed / days)}天 ${Math.floor((elapsed % days) / hours)}小时 ${Math.floor((elapsed % hours) / (60 * 1000))}分 ${Math.floor((elapsed % (60 * 1000)) / 1000)}秒`);
     };
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [siteConfig.buildDate]);
+  }, []);
 
   return (
     <Box sx={{ ...glassPanelSx, display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "stretch", minHeight: 82 }}>

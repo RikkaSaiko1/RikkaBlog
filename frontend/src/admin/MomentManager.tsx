@@ -15,12 +15,14 @@ function fromMoment(item?: AdminMoment): MomentForm {
     : { ...emptyForm, slug: createMomentSlug() };
 }
 
-// 提取 Markdown 正文里内嵌的图片 URL（粘贴上传产生），随保存自动并入 images 字段
+// 提取 Markdown 正文里内嵌的图片 URL（粘贴上传产生），随保存自动并入 images 字段；视频链接不算图片
 function extractImageUrls(md: string): string[] {
   const urls: string[] = [];
   const re = /!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(md))) urls.push(match[1]);
+  while ((match = re.exec(md))) {
+    if (!/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(match[1])) urls.push(match[1]);
+  }
   return urls;
 }
 
