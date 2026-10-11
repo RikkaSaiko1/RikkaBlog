@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Box } from "@mui/material";
 import rehypeRaw from "rehype-raw";
 import ReactMarkdown from "react-markdown";
@@ -156,35 +157,39 @@ export function MarkdownView({ content }: { content: string }) {
       >
         {decodedContent}
       </ReactMarkdown>
-      {lightbox && (
-        <Box
-          onClick={() => setLightbox(null)}
-          sx={{
-            position: "fixed",
-            inset: 0,
-            zIndex: (t) => t.zIndex.tooltip + 10,
-            bgcolor: "rgba(8, 12, 22, 0.88)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            p: { xs: 2, sm: 4 },
-            cursor: "zoom-out",
-          }}
-        >
+      {lightbox &&
+        // Portal 到 body：祖先的 backdrop-filter 会成为 fixed 后代的包含块，
+        // 导致遮罩相对文章卡片而非视口定位（图片跑到屏幕外）
+        createPortal(
           <Box
-            component="img"
-            src={lightbox.src}
-            alt={lightbox.alt ?? ""}
+            onClick={() => setLightbox(null)}
             sx={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              borderRadius: 2,
-              boxShadow: "0 24px 80px rgba(0, 0, 0, 0.5)",
+              position: "fixed",
+              inset: 0,
+              zIndex: (t) => t.zIndex.tooltip + 10,
+              bgcolor: "rgba(8, 12, 22, 0.88)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              p: { xs: 2, sm: 4 },
+              cursor: "zoom-out",
             }}
-          />
-        </Box>
-      )}
+          >
+            <Box
+              component="img"
+              src={lightbox.src}
+              alt={lightbox.alt ?? ""}
+              sx={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                borderRadius: 2,
+                boxShadow: "0 24px 80px rgba(0, 0, 0, 0.5)",
+              }}
+            />
+          </Box>,
+          document.body,
+        )}
     </Box>
   );
 }
