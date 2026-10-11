@@ -55,6 +55,7 @@ function renderSection(section: AdminSection) {
 }
 
 function sectionFromHash(): AdminSection {
+  if (typeof window === "undefined") return "dashboard";
   const hash = window.location.hash.replace("#", "") as AdminSection;
   return adminSections.some((item) => item.key === hash) ? hash : "dashboard";
 }
