@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Box } from "@mui/material";
 import rehypeRaw from "rehype-raw";
 import ReactMarkdown from "react-markdown";
@@ -39,6 +40,21 @@ function urlTransform(url: string) {
 
 export function MarkdownView({ content }: { content: string }) {
   const decodedContent = decodeHtmlEntities(content);
+  const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
+
+  // 灯箱打开时：Esc 关闭 + 锁定背景滚动
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [lightbox]);
 
   return (
     <Box
@@ -93,7 +109,17 @@ export function MarkdownView({ content }: { content: string }) {
               );
             }
             return (
-              <img src={src} alt={alt} {...props} />
+              <img
+                src={src}
+                alt={alt}
+                style={{ cursor: "zoom-in" }}
+                onClick={(event) => {
+                  // 图片被超链接包裹时保留链接跳转行为，不弹灯箱
+                  if (event.currentTarget.closest("a")) return;
+                  if (src) setLightbox({ src, alt: alt ?? undefined });
+                }}
+                {...props}
+              />
             );
           },
           // 命中 YouTube / Bilibili 分享链接时直接渲染为播放器，其余链接保持原样
@@ -130,6 +156,35 @@ export function MarkdownView({ content }: { content: string }) {
       >
         {decodedContent}
       </ReactMarkdown>
+      {lightbox && (
+        <Box
+          onClick={() => setLightbox(null)}
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: (t) => t.zIndex.tooltip + 10,
+            bgcolor: "rgba(8, 12, 22, 0.88)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            p: { xs: 2, sm: 4 },
+            cursor: "zoom-out",
+          }}
+        >
+          <Box
+            component="img"
+            src={lightbox.src}
+            alt={lightbox.alt ?? ""}
+            sx={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              borderRadius: 2,
+              boxShadow: "0 24px 80px rgba(0, 0, 0, 0.5)",
+            }}
+          />
+        </Box>
+      )}
     </Box>
   );
 }
