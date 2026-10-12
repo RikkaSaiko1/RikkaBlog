@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Box } from "@mui/material";
 import rehypeRaw from "rehype-raw";
@@ -22,6 +22,23 @@ function decodeHtmlEntities(value: string) {
 const SAFE_PROTOCOL = /^(https?|ircs?|mailto|xmpp)$/i;
 const DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif|svg\+xml);/i;
 
+const lightboxBtnStyle: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid rgba(219, 228, 245, 0.28)",
+  borderRadius: 8,
+  background: "rgba(219, 228, 245, 0.1)",
+  color: "#dbe4f5",
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1,
+  cursor: "pointer",
+  padding: 0,
+};
+
 function urlTransform(url: string) {
   const colon = url.indexOf(":");
   if (colon < 0) return url; // 相对路径，放行
@@ -42,10 +59,23 @@ function urlTransform(url: string) {
 export function MarkdownView({ content }: { content: string }) {
   const decodedContent = decodeHtmlEntities(content);
   const [lightbox, setLightbox] = useState<{ src: string; alt?: string } | null>(null);
+  // 灯箱缩放与平移状态
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const draggingRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const movedRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const lightboxRef = useRef<HTMLDivElement | null>(null);
 
-  // 灯箱打开时：Esc 关闭 + 锁定背景滚动
+  const resetLightboxTransform = () => {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  };
+
+  // 灯箱打开时：Esc 关闭 + 锁定背景滚动 + 滚轮缩放
   useEffect(() => {
     if (!lightbox) return;
+    resetLightboxTransform();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setLightbox(null);
     };
@@ -55,6 +85,24 @@ export function MarkdownView({ content }: { content: string }) {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
+  }, [lightbox]);
+
+  // 滚轮缩放：passive:false 才能 preventDefault，避免触控板捏合时触发页面缩放
+  useEffect(() => {
+    if (!lightbox) return;
+    const node = lightboxRef.current;
+    if (!node) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setScale((prev) => {
+        const next = prev * (event.deltaY < 0 ? 1.15 : 1 / 1.15);
+        const clamped = Math.min(6, Math.max(1, next));
+        if (clamped === 1) setOffset({ x: 0, y: 0 });
+        return clamped;
+      });
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
   }, [lightbox]);
 
   return (
@@ -161,33 +209,110 @@ export function MarkdownView({ content }: { content: string }) {
         // Portal 到 body：祖先的 backdrop-filter 会成为 fixed 后代的包含块，
         // 导致遮罩相对文章卡片而非视口定位（图片跑到屏幕外）
         createPortal(
-          <Box
+          <div
+            ref={lightboxRef}
             onClick={() => setLightbox(null)}
-            sx={{
+            style={{
               position: "fixed",
               inset: 0,
-              zIndex: (t) => t.zIndex.tooltip + 10,
-              bgcolor: "rgba(8, 12, 22, 0.88)",
+              zIndex: 1300,
+              background: "rgba(8, 12, 22, 0.88)",
               backdropFilter: "blur(4px)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              p: { xs: 2, sm: 4 },
-              cursor: "zoom-out",
+              padding: "clamp(8px, 3vw, 32px)",
+              cursor: scale > 1 ? "grab" : "zoom-out",
+              overflow: "hidden",
+              touchAction: "none",
             }}
           >
-            <Box
-              component="img"
+            <img
               src={lightbox.src}
               alt={lightbox.alt ?? ""}
-              sx={{
+              draggable={false}
+              onClick={(event) => {
+                // 放大状态下点击图片不关闭；刚拖动过也不关闭
+                if (scale > 1 || movedRef.current) {
+                  event.stopPropagation();
+                  movedRef.current = false;
+                  return;
+                }
+                setLightbox(null);
+              }}
+              onPointerDown={(event) => {
+                if (scale <= 1) return;
+                event.stopPropagation();
+                draggingRef.current = { startX: event.clientX, startY: event.clientY, baseX: offset.x, baseY: offset.y };
+                setDragging(true);
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                const drag = draggingRef.current;
+                if (!drag) return;
+                const dx = event.clientX - drag.startX;
+                const dy = event.clientY - drag.startY;
+                if (Math.abs(dx) + Math.abs(dy) > 4) movedRef.current = true;
+                setOffset({ x: drag.baseX + dx, y: drag.baseY + dy });
+              }}
+              onPointerUp={() => {
+                draggingRef.current = null;
+                setDragging(false);
+              }}
+              style={{
                 maxWidth: "100%",
                 maxHeight: "100%",
-                borderRadius: 2,
+                borderRadius: 16,
                 boxShadow: "0 24px 80px rgba(0, 0, 0, 0.5)",
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+                transition: dragging ? "none" : "transform 120ms ease-out",
+                cursor: scale > 1 ? (dragging ? "grabbing" : "grab") : "zoom-out",
+                userSelect: "none",
               }}
             />
-          </Box>,
+            <div
+              onClick={(event) => event.stopPropagation()}
+              style={{
+                position: "absolute",
+                bottom: 18,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 14px",
+                borderRadius: 999,
+                background: "rgba(16, 24, 46, 0.72)",
+                backdropFilter: "blur(8px)",
+                color: "#dbe4f5",
+                font: "700 12px/1.4 system-ui, sans-serif",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.max(1, scale / 1.3);
+                  setScale(next);
+                  if (next === 1) setOffset({ x: 0, y: 0 });
+                }}
+                style={lightboxBtnStyle}
+                aria-label="缩小"
+              >
+                −
+              </button>
+              <span style={{ minWidth: 44, textAlign: "center" }}>{Math.round(scale * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setScale(Math.min(6, scale * 1.3))}
+                style={lightboxBtnStyle}
+                aria-label="放大"
+              >
+                ＋
+              </button>
+              <span style={{ opacity: 0.55 }}>滚轮缩放 · 放大后可拖动</span>
+            </div>
+          </div>,
           document.body,
         )}
     </Box>
