@@ -66,6 +66,9 @@ export function MarkdownView({ content }: { content: string }) {
   const movedRef = useRef(false);
   const [dragging, setDragging] = useState(false);
   const lightboxRef = useRef<HTMLDivElement | null>(null);
+  // 多指手势：记录所有按下的指针，用于区分单指拖动与双指捏合缩放
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
 
   const resetLightboxTransform = () => {
     setScale(1);
@@ -241,13 +244,43 @@ export function MarkdownView({ content }: { content: string }) {
                 setLightbox(null);
               }}
               onPointerDown={(event) => {
-                if (scale <= 1) return;
-                event.stopPropagation();
-                draggingRef.current = { startX: event.clientX, startY: event.clientY, baseX: offset.x, baseY: offset.y };
-                setDragging(true);
-                event.currentTarget.setPointerCapture(event.pointerId);
+                pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                // 合成事件或异常场景下 setPointerCapture 可能抛错，避免中断手势逻辑
+                try {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                  /* ignore */
+                }
+                if (pointersRef.current.size === 1) {
+                  // 单指：放大后拖动
+                  if (scale <= 1) return;
+                  event.stopPropagation();
+                  draggingRef.current = { startX: event.clientX, startY: event.clientY, baseX: offset.x, baseY: offset.y };
+                  setDragging(true);
+                } else if (pointersRef.current.size === 2) {
+                  // 双指：捏合缩放，取消拖动
+                  event.stopPropagation();
+                  draggingRef.current = null;
+                  setDragging(false);
+                  const [a, b] = [...pointersRef.current.values()];
+                  pinchRef.current = { startDist: Math.hypot(a.x - b.x, a.y - b.y), startScale: scale };
+                }
               }}
               onPointerMove={(event) => {
+                if (!pointersRef.current.has(event.pointerId)) return;
+                pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                const pinch = pinchRef.current;
+                if (pinch && pointersRef.current.size >= 2) {
+                  const [a, b] = [...pointersRef.current.values()];
+                  const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                  if (pinch.startDist > 0) {
+                    const next = Math.min(6, Math.max(1, pinch.startScale * (dist / pinch.startDist)));
+                    movedRef.current = true;
+                    setScale(next);
+                    if (next === 1) setOffset({ x: 0, y: 0 });
+                  }
+                  return;
+                }
                 const drag = draggingRef.current;
                 if (!drag) return;
                 const dx = event.clientX - drag.startX;
@@ -255,7 +288,17 @@ export function MarkdownView({ content }: { content: string }) {
                 if (Math.abs(dx) + Math.abs(dy) > 4) movedRef.current = true;
                 setOffset({ x: drag.baseX + dx, y: drag.baseY + dy });
               }}
-              onPointerUp={() => {
+              onPointerUp={(event) => {
+                pointersRef.current.delete(event.pointerId);
+                if (pointersRef.current.size < 2) pinchRef.current = null;
+                if (pointersRef.current.size === 0) {
+                  draggingRef.current = null;
+                  setDragging(false);
+                }
+              }}
+              onPointerCancel={(event) => {
+                pointersRef.current.delete(event.pointerId);
+                if (pointersRef.current.size < 2) pinchRef.current = null;
                 draggingRef.current = null;
                 setDragging(false);
               }}
@@ -310,7 +353,7 @@ export function MarkdownView({ content }: { content: string }) {
               >
                 ＋
               </button>
-              <span style={{ opacity: 0.55 }}>滚轮缩放 · 放大后可拖动</span>
+              <span style={{ opacity: 0.55 }}>滚轮/双指缩放 · 放大后可拖动</span>
             </div>
           </div>,
           document.body,
