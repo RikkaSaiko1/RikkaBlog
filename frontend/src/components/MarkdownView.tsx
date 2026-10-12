@@ -65,6 +65,8 @@ export function MarkdownView({ content }: { content: string }) {
   const draggingRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const movedRef = useRef(false);
   const [dragging, setDragging] = useState(false);
+  // 捏合进行中：需禁用过渡动画，否则每帧缩放都被 120ms 缓动打断，手感发飘
+  const [pinching, setPinching] = useState(false);
   const lightboxRef = useRef<HTMLDivElement | null>(null);
   // 多指手势：记录所有按下的指针，用于区分单指拖动与双指捏合缩放
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -262,6 +264,7 @@ export function MarkdownView({ content }: { content: string }) {
                   event.stopPropagation();
                   draggingRef.current = null;
                   setDragging(false);
+                  setPinching(true);
                   const [a, b] = [...pointersRef.current.values()];
                   pinchRef.current = { startDist: Math.hypot(a.x - b.x, a.y - b.y), startScale: scale };
                 }
@@ -294,13 +297,17 @@ export function MarkdownView({ content }: { content: string }) {
                 if (pointersRef.current.size === 0) {
                   draggingRef.current = null;
                   setDragging(false);
+                  setPinching(false);
                 }
               }}
               onPointerCancel={(event) => {
                 pointersRef.current.delete(event.pointerId);
                 if (pointersRef.current.size < 2) pinchRef.current = null;
-                draggingRef.current = null;
-                setDragging(false);
+                if (pointersRef.current.size === 0) {
+                  draggingRef.current = null;
+                  setDragging(false);
+                  setPinching(false);
+                }
               }}
               style={{
                 maxWidth: "100%",
@@ -308,7 +315,8 @@ export function MarkdownView({ content }: { content: string }) {
                 borderRadius: 16,
                 boxShadow: "0 24px 80px rgba(0, 0, 0, 0.5)",
                 transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-                transition: dragging ? "none" : "transform 120ms ease-out",
+                // 手势进行中禁用过渡让图片跟手；仅按钮/滚轮这类离散操作保留缓动
+                transition: dragging || pinching ? "none" : "transform 120ms ease-out",
                 cursor: scale > 1 ? (dragging ? "grabbing" : "grab") : "zoom-out",
                 userSelect: "none",
               }}
